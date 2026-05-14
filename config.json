@@ -1,0 +1,6 @@
+{
+  "windowMinutes": 5,
+  "minUniqueAddresses": 3,
+  "pollIntervalMs": 12000,
+  "addressBookPath": "addresses.txt"
+}
