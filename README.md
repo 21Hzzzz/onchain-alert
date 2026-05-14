@@ -2,7 +2,32 @@
 
 Ethereum 主网地址集体行为监控器。程序会通过 HTTP RPC 轮询新区块，当足够多的被监控地址在配置的时间窗口内直接与同一个合约交互时，向控制台打印 JSON 告警，并通过 Telegram bot 发送到指定群组。
 
-## 安装
+## 一键部署
+
+目标环境：root 用户登录的 Ubuntu 服务器。项目会部署到 `/root/onchain-alert`，并安装为 `onchain-alert.service` systemd 服务。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/21Hzzzz/onchain-alert/main/deploy.sh | bash
+```
+
+脚本会自动：
+
+- 安装 `curl`、`git`、`unzip`、`ca-certificates`。
+- 安装 Bun。
+- clone 或更新 `https://github.com/21Hzzzz/onchain-alert` 到 `/root/onchain-alert`。
+- 保留已有 `.env`、`addresses.txt`、`config.json`。
+- 交互式补齐 `.env` 中缺失的 RPC、Etherscan、Telegram 配置。
+- 安装依赖并启动 systemd 服务。
+
+常用运维命令：
+
+```bash
+systemctl status onchain-alert
+journalctl -u onchain-alert -f
+systemctl restart onchain-alert
+```
+
+## 本地安装
 
 ```bash
 bun install
