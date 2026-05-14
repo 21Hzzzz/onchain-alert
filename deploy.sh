@@ -113,7 +113,7 @@ ensure_env_value() {
   local current
   current="$(read_env_value "$key")"
 
-  if [[ -n "$current" && "$current" != *your-* && "$current" != "https://your-ethereum-rpc.example" ]]; then
+  if [[ -n "$current" ]] && ! is_env_placeholder "$current"; then
     return
   fi
 
@@ -123,17 +123,25 @@ ensure_env_value() {
       die "Interactive configuration requires a TTY. Run this script from an interactive root shell."
     fi
 
-    if [[ "$key" == *"TOKEN"* || "$key" == *"KEY"* ]]; then
-      read -r -s -p "Enter $key: " prompt_value < /dev/tty
-      printf '\n' > /dev/tty
-    else
-      read -r -p "Enter $key: " prompt_value < /dev/tty
-    fi
+    read -r -p "Enter $key: " prompt_value < /dev/tty
     prompt_value="${prompt_value#"${prompt_value%%[![:space:]]*}"}"
     prompt_value="${prompt_value%"${prompt_value##*[![:space:]]}"}"
   done
 
   upsert_env_value "$key" "$prompt_value"
+}
+
+is_env_placeholder() {
+  local value="$1"
+
+  case "$value" in
+    *your-*|https://your-ethereum-rpc.example|123456:your-telegram-bot-token|-1001234567890)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 read_env_value() {
