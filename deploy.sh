@@ -123,7 +123,9 @@ ensure_env_value() {
       die "Interactive configuration requires a TTY. Run this script from an interactive root shell."
     fi
 
+    stty echo < /dev/tty 2>/dev/null || true
     read -r -p "Enter $key: " prompt_value < /dev/tty
+    stty echo < /dev/tty 2>/dev/null || true
     prompt_value="${prompt_value#"${prompt_value%%[![:space:]]*}"}"
     prompt_value="${prompt_value%"${prompt_value##*[![:space:]]}"}"
   done
