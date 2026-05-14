@@ -31,6 +31,7 @@ export type ParticipantAddressDetail = {
   remark?: string;
   methodNames: readonly string[];
   methodSelectors: readonly Hex[];
+  transactionHashes: readonly Hash[];
 };
 
 type ContractState = {
@@ -179,12 +180,16 @@ function buildAlert(
 
   const participantAddresses = new Map<string, Address>();
   const participantMethods = new Map<string, Map<string, Hex | undefined>>();
+  const participantTransactions = new Map<string, Hash[]>();
   for (const event of orderedEvents) {
     const key = addressKey(event.from);
     participantAddresses.set(key, event.from);
     const methods = participantMethods.get(key) ?? new Map<string, Hex | undefined>();
     methods.set(event.methodName, event.methodSelector);
     participantMethods.set(key, methods);
+    const transactionHashes = participantTransactions.get(key) ?? [];
+    transactionHashes.push(event.transactionHash);
+    participantTransactions.set(key, transactionHashes);
   }
   const participantAddressList = Array.from(participantAddresses.values());
 
@@ -196,7 +201,12 @@ function buildAlert(
     uniqueAddressCount: participantAddresses.size,
     participantAddresses: participantAddressList,
     participantAddressDetails: participantAddressList.map((address) =>
-      buildParticipantAddressDetail(address, addressRemarks, participantMethods),
+      buildParticipantAddressDetail(
+        address,
+        addressRemarks,
+        participantMethods,
+        participantTransactions,
+      ),
     ),
     transactionHashes: orderedEvents.map((event) => event.transactionHash),
     firstInteractionAt: toIsoTimestamp(firstEvent.timestamp),
@@ -210,6 +220,7 @@ function buildParticipantAddressDetail(
   address: Address,
   addressRemarks: ReadonlyMap<string, string>,
   participantMethods: ReadonlyMap<string, ReadonlyMap<string, Hex | undefined>>,
+  participantTransactions: ReadonlyMap<string, readonly Hash[]>,
 ): ParticipantAddressDetail {
   const remark = addressRemarks.get(addressKey(address));
   const methods = participantMethods.get(addressKey(address)) ?? new Map<string, Hex | undefined>();
@@ -217,10 +228,11 @@ function buildParticipantAddressDetail(
   const methodSelectors = Array.from(methods.values()).filter(
     (selector): selector is Hex => selector !== undefined,
   );
+  const transactionHashes = participantTransactions.get(addressKey(address)) ?? [];
 
   return remark === undefined
-    ? { address, methodNames, methodSelectors }
-    : { address, remark, methodNames, methodSelectors };
+    ? { address, methodNames, methodSelectors, transactionHashes }
+    : { address, remark, methodNames, methodSelectors, transactionHashes };
 }
 
 function toIsoTimestamp(timestampSeconds: number): string {

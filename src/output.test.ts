@@ -21,11 +21,13 @@ describe("formatAlertForConsole", () => {
           remark: "wallet one",
           methodNames: ["mint"],
           methodSelectors: ["0x40c10f19"],
+          transactionHashes: [`0x${"1".padStart(64, "0")}` as Hash],
         },
         {
           address: "0x0000000000000000000000000000000000000002" as Address,
           methodNames: ["approve"],
           methodSelectors: ["0x095ea7b3"],
+          transactionHashes: [`0x${"2".padStart(64, "0")}` as Hash],
         },
       ],
       transactionHashes: [

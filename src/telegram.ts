@@ -73,7 +73,8 @@ export function formatTelegramAlert(alert: CollectiveInteractionAlert): string {
 
   return [
     "<b>Onchain Alert</b>",
-    `合约: <a href="${contractUrl}">${escapeHtml(alert.contractAddress)}</a>`,
+    `合约: <code>${escapeHtml(alert.contractAddress)}</code>`,
+    `<a href="${contractUrl}">🌐查看合约</a>`,
     `窗口: ${formatWindow(alert.windowSeconds)}`,
     `参与地址: ${alert.uniqueAddressCount} / ${alert.minUniqueAddresses}`,
     `首次交互: ${formatUtc8(alert.firstInteractionAt)}`,
@@ -113,8 +114,9 @@ function formatParticipantLines(
         : `${participant.remark} (${participant.address})`;
     const methodLabel =
       participant.methodNames.length === 0 ? "unknown" : participant.methodNames.join(", ");
+    const transactionLinks = formatTransactionLinks(participant.transactionHashes);
 
-    return `- ${escapeHtml(addressLabel)}: ${escapeHtml(methodLabel)}`;
+    return `- ${escapeHtml(addressLabel)}: ${escapeHtml(methodLabel)} | ${transactionLinks}`;
   });
   const omittedCount = participantAddressDetails.length - visibleParticipants.length;
 
@@ -123,6 +125,19 @@ function formatParticipantLines(
   }
 
   return lines;
+}
+
+function formatTransactionLinks(transactionHashes: readonly string[]): string {
+  if (transactionHashes.length === 0) {
+    return "unknown";
+  }
+
+  return transactionHashes
+    .map((transactionHash) => {
+      const transactionUrl = etherscanTransactionUrl(transactionHash);
+      return `<a href="${transactionUrl}">tx</a>`;
+    })
+    .join(", ");
 }
 
 function formatWindow(windowSeconds: number): string {
@@ -135,6 +150,10 @@ function formatWindow(windowSeconds: number): string {
 
 function etherscanAddressUrl(address: string): string {
   return `https://etherscan.io/address/${address}`;
+}
+
+function etherscanTransactionUrl(transactionHash: string): string {
+  return `https://etherscan.io/tx/${transactionHash}`;
 }
 
 function escapeHtml(value: string): string {

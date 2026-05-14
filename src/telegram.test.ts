@@ -10,16 +10,20 @@ describe("formatUtc8", () => {
 });
 
 describe("formatTelegramAlert", () => {
-  test("includes etherscan contract link and UTC+8 timestamps", () => {
+  test("includes copyable contract address, etherscan links, transaction links, and UTC+8 timestamps", () => {
     const message = formatTelegramAlert(alert());
 
     expect(message).toContain(
-      '<a href="https://etherscan.io/address/0x00000000000000000000000000000000000000aa">0x00000000000000000000000000000000000000aa</a>',
+      "<code>0x00000000000000000000000000000000000000aa</code>",
+    );
+    expect(message).toContain(
+      '<a href="https://etherscan.io/address/0x00000000000000000000000000000000000000aa">🌐查看合约</a>',
     );
     expect(message).toContain("2026-05-14 20:00:00 UTC+8");
     expect(message).toContain(
-      "团队 &amp; A (0x0000000000000000000000000000000000000001): mint",
+      '团队 &amp; A (0x0000000000000000000000000000000000000001): mint | <a href="https://etherscan.io/tx/0x0000000000000000000000000000000000000000000000000000000000000001">tx</a>',
     );
+    expect(message).not.toContain("0x00000000...00000001");
   });
 });
 
@@ -83,11 +87,13 @@ function alert(): CollectiveInteractionAlert {
         remark: "团队 & A",
         methodNames: ["mint"],
         methodSelectors: ["0x40c10f19"],
+        transactionHashes: [`0x${"1".padStart(64, "0")}` as Hash],
       },
       {
         address: "0x0000000000000000000000000000000000000002" as Address,
         methodNames: ["approve"],
         methodSelectors: ["0x095ea7b3"],
+        transactionHashes: [`0x${"2".padStart(64, "0")}` as Hash],
       },
     ],
     transactionHashes: [

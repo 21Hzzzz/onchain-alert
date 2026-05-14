@@ -30,11 +30,13 @@ describe("CollectiveInteractionDetector", () => {
         remark: "wallet one",
         methodNames: ["mint"],
         methodSelectors: ["0x40c10f19"],
+        transactionHashes: [hash(1)],
       },
       {
         address: ADDRESS_TWO,
         methodNames: ["approve"],
         methodSelectors: ["0x095ea7b3"],
+        transactionHashes: [hash(2)],
       },
     ]);
     expect(alerts[0]?.transactionHashes).toEqual([hash(1), hash(2)]);
