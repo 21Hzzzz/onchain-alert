@@ -7,6 +7,7 @@ export type InteractionEvent = {
   transactionHash: Hash;
   methodSelector?: Hex;
   methodName: string;
+  openSeaUrl?: string;
   blockNumber: bigint;
   timestamp: number;
 };
@@ -20,6 +21,7 @@ export type CollectiveInteractionAlert = {
   participantAddresses: readonly Address[];
   participantAddressDetails: readonly ParticipantAddressDetail[];
   transactionHashes: readonly Hash[];
+  openSeaUrl?: string;
   firstInteractionAt: string;
   latestInteractionAt: string;
   triggerBlockNumber: bigint;
@@ -209,6 +211,7 @@ function buildAlert(
       ),
     ),
     transactionHashes: orderedEvents.map((event) => event.transactionHash),
+    openSeaUrl: latestOpenSeaUrl(orderedEvents),
     firstInteractionAt: toIsoTimestamp(firstEvent.timestamp),
     latestInteractionAt: toIsoTimestamp(latestEvent.timestamp),
     triggerBlockNumber: latestEvent.blockNumber,
@@ -233,6 +236,10 @@ function buildParticipantAddressDetail(
   return remark === undefined
     ? { address, methodNames, methodSelectors, transactionHashes }
     : { address, remark, methodNames, methodSelectors, transactionHashes };
+}
+
+function latestOpenSeaUrl(events: readonly InteractionEvent[]): string | undefined {
+  return [...events].reverse().find((event) => event.openSeaUrl !== undefined)?.openSeaUrl;
 }
 
 function toIsoTimestamp(timestampSeconds: number): string {

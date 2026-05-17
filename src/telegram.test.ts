@@ -19,11 +19,22 @@ describe("formatTelegramAlert", () => {
     expect(message).toContain(
       '<a href="https://etherscan.io/address/0x00000000000000000000000000000000000000aa">🌐查看合约</a>',
     );
+    expect(message).not.toContain("OpenSea");
     expect(message).toContain("2026-05-14 20:00:00 UTC+8");
     expect(message).toContain(
       '团队 &amp; A (0x0000000000000000000000000000000000000001): mint | <a href="https://etherscan.io/tx/0x0000000000000000000000000000000000000000000000000000000000000001">tx</a>',
     );
     expect(message).not.toContain("0x00000000...00000001");
+  });
+
+  test("adds an OpenSea link beside the contract link for NFT alerts", () => {
+    const openSeaUrl =
+      "https://opensea.io/assets/ethereum/0x00000000000000000000000000000000000000aa/1";
+    const message = formatTelegramAlert(alert({ openSeaUrl }));
+
+    expect(message).toContain(
+      `<a href="https://etherscan.io/address/0x00000000000000000000000000000000000000aa">🌐查看合约</a> | <a href="${openSeaUrl}">OpenSea</a>`,
+    );
   });
 });
 
@@ -70,7 +81,7 @@ describe("sendTelegramAlert", () => {
   });
 });
 
-function alert(): CollectiveInteractionAlert {
+function alert(overrides: Partial<CollectiveInteractionAlert> = {}): CollectiveInteractionAlert {
   return {
     kind: "collective_contract_interaction",
     contractAddress: "0x00000000000000000000000000000000000000aa" as Address,
@@ -104,5 +115,6 @@ function alert(): CollectiveInteractionAlert {
     latestInteractionAt: "2026-05-14T12:01:00.000Z",
     triggerBlockNumber: 123n,
     triggerBlockTimestamp: "2026-05-14T12:01:00.000Z",
+    ...overrides,
   };
 }

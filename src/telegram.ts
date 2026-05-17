@@ -70,11 +70,12 @@ export function formatTelegramAlert(alert: CollectiveInteractionAlert): string {
   const contractUrl = etherscanAddressUrl(alert.contractAddress);
   const blockUrl = `https://etherscan.io/block/${alert.triggerBlockNumber.toString()}`;
   const participantLines = formatParticipantLines(alert.participantAddressDetails);
+  const contractLinks = formatContractLinks(contractUrl, alert.openSeaUrl);
 
   return [
     "<b>Onchain Alert</b>",
     `合约: <code>${escapeHtml(alert.contractAddress)}</code>`,
-    `<a href="${contractUrl}">🌐查看合约</a>`,
+    contractLinks,
     `窗口: ${formatWindow(alert.windowSeconds)}`,
     `参与地址: ${alert.uniqueAddressCount} / ${alert.minUniqueAddresses}`,
     `首次交互: ${formatUtc8(alert.firstInteractionAt)}`,
@@ -146,6 +147,15 @@ function formatWindow(windowSeconds: number): string {
   }
 
   return `${windowSeconds} 秒`;
+}
+
+function formatContractLinks(contractUrl: string, openSeaUrl: string | undefined): string {
+  const etherscanLink = `<a href="${contractUrl}">🌐查看合约</a>`;
+  if (openSeaUrl === undefined) {
+    return etherscanLink;
+  }
+
+  return `${etherscanLink} | <a href="${openSeaUrl}">OpenSea</a>`;
 }
 
 function etherscanAddressUrl(address: string): string {

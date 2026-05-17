@@ -103,6 +103,29 @@ describe("CollectiveInteractionDetector", () => {
     expect(alerts[0]?.uniqueAddressCount).toBe(2);
     expect(alerts[0]?.transactionHashes).toEqual([hash(1), hash(2), hash(3)]);
   });
+
+  test("carries the latest OpenSea URL into the alert", () => {
+    const detector = new CollectiveInteractionDetector({
+      windowSeconds: 300,
+      minUniqueAddresses: 2,
+    });
+    const openSeaUrl =
+      "https://opensea.io/assets/ethereum/0x00000000000000000000000000000000000000aa/2";
+
+    const alerts = detector.recordInteractions(
+      [
+        event(ADDRESS_ONE, 1000, 1),
+        {
+          ...event(ADDRESS_TWO, 1010, 2),
+          openSeaUrl,
+        },
+        event(ADDRESS_THREE, 1020, 3),
+      ],
+      1020,
+    );
+
+    expect(alerts[0]?.openSeaUrl).toBe(openSeaUrl);
+  });
 });
 
 function event(from: Address, timestamp: number, nonce: number): InteractionEvent {

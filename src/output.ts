@@ -11,6 +11,7 @@ export function formatAlertForConsole(alert: CollectiveInteractionAlert): string
       participantAddresses: alert.participantAddresses,
       participantAddressDetails: alert.participantAddressDetails,
       transactionHashes: alert.transactionHashes,
+      ...(alert.openSeaUrl === undefined ? {} : { openSeaUrl: alert.openSeaUrl }),
       firstInteractionAt: alert.firstInteractionAt,
       latestInteractionAt: alert.latestInteractionAt,
       triggerBlockNumber: alert.triggerBlockNumber.toString(),

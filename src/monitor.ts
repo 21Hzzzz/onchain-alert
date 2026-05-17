@@ -171,6 +171,7 @@ function createTransactionReceiptResolver(client: EthereumPublicClient): Transac
       logs: receipt.logs.map((log) => ({
         address: log.address,
         topics: log.topics,
+        data: log.data,
       })),
     };
   };
