@@ -9,7 +9,7 @@ APP_DIR="/root/onchain-radar"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 GLOBAL_COMMAND="/usr/local/bin/radar"
 BUN_BIN="/root/.bun/bin/bun"
-CONFIG_FILES=(".env" "addresses.txt" "config.json")
+UPDATE_PRESERVED_FILES=(".env")
 VALIDATION_TIMEOUT_SECONDS=120
 SERVICE_OPERATION_TIMEOUT_SECONDS=45
 
@@ -84,7 +84,7 @@ backup_runtime_config() {
   local backup_dir="$1"
 
   mkdir -p "$backup_dir"
-  for file in "${CONFIG_FILES[@]}"; do
+  for file in "${UPDATE_PRESERVED_FILES[@]}"; do
     if [[ -f "$APP_DIR/$file" ]]; then
       cp -a "$APP_DIR/$file" "$backup_dir/$file"
     fi
@@ -94,7 +94,7 @@ backup_runtime_config() {
 restore_runtime_config() {
   local backup_dir="$1"
 
-  for file in "${CONFIG_FILES[@]}"; do
+  for file in "${UPDATE_PRESERVED_FILES[@]}"; do
     if [[ -f "$backup_dir/$file" ]]; then
       cp -a "$backup_dir/$file" "$APP_DIR/$file"
     else

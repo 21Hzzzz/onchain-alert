@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { encodeAbiParameters, type Address, type Hash, type Hex } from "viem";
+import type { Address, Hash, Hex } from "viem";
 import { buildWatchedAddressSet } from "./address.ts";
 import { buildMethodBlacklist } from "./methods.ts";
 import {
@@ -172,7 +172,7 @@ describe("extractDirectContractInteractions", () => {
       transactionHash: hash(1),
       methodSelector: "0x1249c58b",
       methodName: "mint",
-      openSeaUrl: `https://opensea.io/assets/ethereum/${NFT_ONE}/1`,
+      openSeaUrl: `https://opensea.io/assets/ethereum/${NFT_ONE}`,
     });
   });
 
@@ -207,11 +207,11 @@ describe("extractDirectContractInteractions", () => {
     ).toEqual([
       {
         contractAddress: NFT_ONE,
-        openSeaUrl: `https://opensea.io/assets/ethereum/${NFT_ONE}/1`,
+        openSeaUrl: `https://opensea.io/assets/ethereum/${NFT_ONE}`,
       },
       {
         contractAddress: NFT_TWO,
-        openSeaUrl: `https://opensea.io/assets/ethereum/${NFT_TWO}/2`,
+        openSeaUrl: `https://opensea.io/assets/ethereum/${NFT_TWO}`,
       },
     ]);
   });
@@ -323,7 +323,6 @@ function erc721MintLog(contractAddress: Address, to: Address, tokenId = 1n): Sca
       addressTopic(to),
       quantityTopic(tokenId),
     ],
-    data: "0x",
   };
 }
 
@@ -336,10 +335,6 @@ function erc1155TransferSingleMintLog(contractAddress: Address, to: Address): Sc
       ZERO_ADDRESS_TOPIC,
       addressTopic(to),
     ],
-    data: encodeAbiParameters(
-      [{ type: "uint256" }, { type: "uint256" }],
-      [1n, 1n],
-    ),
   };
 }
 
@@ -352,10 +347,6 @@ function erc1155TransferBatchMintLog(contractAddress: Address, to: Address): Sca
       ZERO_ADDRESS_TOPIC,
       addressTopic(to),
     ],
-    data: encodeAbiParameters(
-      [{ type: "uint256[]" }, { type: "uint256[]" }],
-      [[2n], [1n]],
-    ),
   };
 }
 

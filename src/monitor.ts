@@ -33,6 +33,7 @@ export async function runMonitor(config: MonitorConfig): Promise<void> {
   const addressRemarks = buildAddressRemarkMap(config.watchedAddresses);
   const detector = new CollectiveInteractionDetector({
     windowSeconds: config.windowSeconds,
+    alertCooldownSeconds: config.alertCooldownSeconds,
     minUniqueAddresses: config.minUniqueAddresses,
     addressRemarks,
   });
@@ -171,7 +172,6 @@ function createTransactionReceiptResolver(client: EthereumPublicClient): Transac
       logs: receipt.logs.map((log) => ({
         address: log.address,
         topics: log.topics,
-        data: log.data,
       })),
     };
   };

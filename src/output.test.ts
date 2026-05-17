@@ -35,7 +35,7 @@ describe("formatAlertForConsole", () => {
         `0x${"2".padStart(64, "0")}` as Hash,
       ],
       openSeaUrl:
-        "https://opensea.io/assets/ethereum/0x00000000000000000000000000000000000000aa/1",
+        "https://opensea.io/assets/ethereum/0x00000000000000000000000000000000000000aa",
       firstInteractionAt: "2026-01-01T00:00:00.000Z",
       latestInteractionAt: "2026-01-01T00:01:00.000Z",
       triggerBlockNumber: 123n,

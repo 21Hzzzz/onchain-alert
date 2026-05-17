@@ -39,6 +39,7 @@ export type ParticipantAddressDetail = {
 type ContractState = {
   events: InteractionEvent[];
   lastAlertedParticipants: Set<string>;
+  lastAlertedAt?: number;
 };
 
 export class CollectiveInteractionDetector {
@@ -47,6 +48,7 @@ export class CollectiveInteractionDetector {
   constructor(
     private readonly options: {
       windowSeconds: number;
+      alertCooldownSeconds?: number;
       minUniqueAddresses: number;
       addressRemarks?: ReadonlyMap<string, string>;
     },
@@ -57,6 +59,13 @@ export class CollectiveInteractionDetector {
 
     if (!Number.isInteger(options.minUniqueAddresses) || options.minUniqueAddresses <= 0) {
       throw new Error("minUniqueAddresses must be a positive integer");
+    }
+
+    if (
+      options.alertCooldownSeconds !== undefined &&
+      (!Number.isFinite(options.alertCooldownSeconds) || options.alertCooldownSeconds < 0)
+    ) {
+      throw new Error("alertCooldownSeconds must be zero or positive");
     }
   }
 
@@ -77,7 +86,7 @@ export class CollectiveInteractionDetector {
 
     const alerts: CollectiveInteractionAlert[] = [];
     for (const contractKey of affectedContracts) {
-      const alert = this.#evaluateContract(contractKey);
+      const alert = this.#evaluateContract(contractKey, currentTimestamp);
       if (alert) {
         alerts.push(alert);
       }
@@ -97,7 +106,11 @@ export class CollectiveInteractionDetector {
         state.lastAlertedParticipants.clear();
       }
 
-      if (state.events.length === 0 && state.lastAlertedParticipants.size === 0) {
+      if (
+        state.events.length === 0 &&
+        state.lastAlertedParticipants.size === 0 &&
+        !this.#isCoolingDown(state, currentTimestamp)
+      ) {
         this.#states.delete(contractKey);
       }
     }
@@ -118,7 +131,10 @@ export class CollectiveInteractionDetector {
     return created;
   }
 
-  #evaluateContract(contractKey: string): CollectiveInteractionAlert | undefined {
+  #evaluateContract(
+    contractKey: string,
+    currentTimestamp: number,
+  ): CollectiveInteractionAlert | undefined {
     const state = this.#states.get(contractKey);
     if (!state) {
       return undefined;
@@ -138,12 +154,27 @@ export class CollectiveInteractionDetector {
       return undefined;
     }
 
+    if (this.#isCoolingDown(state, currentTimestamp)) {
+      return undefined;
+    }
+
     state.lastAlertedParticipants = new Set(participants);
-    return buildAlert(
+    const alert = buildAlert(
       state.events,
       this.options.windowSeconds,
       this.options.minUniqueAddresses,
       this.options.addressRemarks ?? new Map(),
+    );
+    state.lastAlertedAt = currentTimestamp;
+    return alert;
+  }
+
+  #isCoolingDown(state: ContractState, currentTimestamp: number): boolean {
+    const cooldownSeconds = this.options.alertCooldownSeconds ?? 0;
+    return (
+      cooldownSeconds > 0 &&
+      state.lastAlertedAt !== undefined &&
+      currentTimestamp < state.lastAlertedAt + cooldownSeconds
     );
   }
 }

@@ -1,4 +1,4 @@
-import { decodeAbiParameters, type Address, type Hash, type Hex } from "viem";
+import type { Address, Hash, Hex } from "viem";
 import { addressKey } from "./address.ts";
 import type { InteractionEvent } from "./detector.ts";
 import {
@@ -18,7 +18,6 @@ export type ScannableTransaction = {
 export type ScannableLog = {
   address: Address;
   topics: readonly Hex[];
-  data: Hex;
 };
 
 export type ScannableTransactionReceipt = {
@@ -125,7 +124,7 @@ export async function extractDirectContractInteractions(
           interactions.push({
             ...baseInteraction,
             contractAddress: mintedContract.address,
-            openSeaUrl: openSeaAssetUrl(mintedContract.address, mintedContract.tokenId),
+            openSeaUrl: openSeaAssetUrl(mintedContract.address),
           });
         }
         continue;
@@ -147,14 +146,12 @@ function extractMintedContractAddresses(
   const addresses = new Map<string, MintedContract>();
 
   for (const log of receipt.logs) {
-    const tokenId = tokenIdFromMintTransferLog(log);
-    if (tokenId === undefined) {
+    if (!isMintTransferLog(log)) {
       continue;
     }
 
     addresses.set(addressKey(log.address), {
       address: log.address,
-      tokenId,
     });
   }
 
@@ -163,72 +160,25 @@ function extractMintedContractAddresses(
 
 type MintedContract = {
   address: Address;
-  tokenId: bigint;
 };
 
-function tokenIdFromMintTransferLog(log: ScannableLog): bigint | undefined {
+function isMintTransferLog(log: ScannableLog): boolean {
   const eventTopic = log.topics[0]?.toLowerCase();
   if (eventTopic === ERC721_TRANSFER_TOPIC) {
-    if (!isZeroAddressTopic(log.topics[1])) {
-      return undefined;
-    }
-
-    return topicToBigInt(log.topics[3]);
+    return isZeroAddressTopic(log.topics[1]);
   }
 
   if (eventTopic === ERC1155_TRANSFER_SINGLE_TOPIC || eventTopic === ERC1155_TRANSFER_BATCH_TOPIC) {
-    if (!isZeroAddressTopic(log.topics[2])) {
-      return undefined;
-    }
-
-    return eventTopic === ERC1155_TRANSFER_SINGLE_TOPIC
-      ? erc1155TransferSingleTokenId(log.data)
-      : erc1155TransferBatchFirstTokenId(log.data);
+    return isZeroAddressTopic(log.topics[2]);
   }
 
-  return undefined;
+  return false;
 }
 
 function isZeroAddressTopic(topic: Hex | undefined): boolean {
   return topic?.toLowerCase() === ZERO_ADDRESS_TOPIC;
 }
 
-function topicToBigInt(topic: Hex | undefined): bigint | undefined {
-  if (topic === undefined) {
-    return undefined;
-  }
-
-  try {
-    return BigInt(topic);
-  } catch {
-    return undefined;
-  }
-}
-
-function erc1155TransferSingleTokenId(data: Hex): bigint | undefined {
-  try {
-    const [tokenId] = decodeAbiParameters(
-      [{ type: "uint256" }, { type: "uint256" }],
-      data,
-    );
-    return tokenId;
-  } catch {
-    return undefined;
-  }
-}
-
-function erc1155TransferBatchFirstTokenId(data: Hex): bigint | undefined {
-  try {
-    const [tokenIds] = decodeAbiParameters(
-      [{ type: "uint256[]" }, { type: "uint256[]" }],
-      data,
-    );
-    return tokenIds[0];
-  } catch {
-    return undefined;
-  }
-}
-
-function openSeaAssetUrl(contractAddress: Address, tokenId: bigint): string {
-  return `${ETHEREUM_OPENSEA_ASSET_BASE_URL}/${contractAddress}/${tokenId.toString()}`;
+function openSeaAssetUrl(contractAddress: Address): string {
+  return `${ETHEREUM_OPENSEA_ASSET_BASE_URL}/${contractAddress}`;
 }

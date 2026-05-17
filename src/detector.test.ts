@@ -70,6 +70,36 @@ describe("CollectiveInteractionDetector", () => {
     expect(alerts[0]?.participantAddresses).toEqual([ADDRESS_ONE, ADDRESS_TWO, ADDRESS_THREE]);
   });
 
+  test("suppresses repeat alerts for the same contract during cooldown", () => {
+    const detector = new CollectiveInteractionDetector({
+      windowSeconds: 300,
+      alertCooldownSeconds: 120,
+      minUniqueAddresses: 2,
+    });
+
+    detector.recordInteractions([event(ADDRESS_ONE, 1000, 1), event(ADDRESS_TWO, 1010, 2)], 1010);
+
+    const alerts = detector.recordInteractions([event(ADDRESS_THREE, 1020, 3)], 1020);
+
+    expect(alerts).toHaveLength(0);
+  });
+
+  test("alerts again for the same contract after cooldown when a new address joins", () => {
+    const detector = new CollectiveInteractionDetector({
+      windowSeconds: 300,
+      alertCooldownSeconds: 60,
+      minUniqueAddresses: 2,
+    });
+
+    detector.recordInteractions([event(ADDRESS_ONE, 1000, 1), event(ADDRESS_TWO, 1010, 2)], 1010);
+    detector.recordInteractions([event(ADDRESS_THREE, 1020, 3)], 1020);
+
+    const alerts = detector.recordInteractions([event(ADDRESS_THREE, 1080, 4)], 1080);
+
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]?.uniqueAddressCount).toBe(3);
+  });
+
   test("resets alert state after the active window falls below the threshold", () => {
     const detector = new CollectiveInteractionDetector({
       windowSeconds: 100,
@@ -110,7 +140,7 @@ describe("CollectiveInteractionDetector", () => {
       minUniqueAddresses: 2,
     });
     const openSeaUrl =
-      "https://opensea.io/assets/ethereum/0x00000000000000000000000000000000000000aa/2";
+      "https://opensea.io/assets/ethereum/0x00000000000000000000000000000000000000aa";
 
     const alerts = detector.recordInteractions(
       [

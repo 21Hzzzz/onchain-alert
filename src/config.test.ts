@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { getAddress } from "viem";
 import type { AddressBook } from "./addressBook.ts";
-import { DEFAULT_MINT_ROUTER_CONTRACTS, parseConfig, parseRuntimeConfig } from "./config.ts";
+import {
+  DEFAULT_ALERT_COOLDOWN_MINUTES,
+  DEFAULT_MINT_ROUTER_CONTRACTS,
+  parseConfig,
+  parseRuntimeConfig,
+} from "./config.ts";
 
 const ETH_RPC_HTTP_URL = "https://example.invalid/rpc";
 const ETHERSCAN_API_KEY = "etherscan-api-key";
@@ -35,6 +40,8 @@ describe("parseRuntimeConfig", () => {
     expect(config.telegramBotToken).toBe(TELEGRAM_BOT_TOKEN);
     expect(config.telegramChatId).toBe(TELEGRAM_CHAT_ID);
     expect(config.windowSeconds).toBe(300);
+    expect(config.alertCooldownMinutes).toBe(DEFAULT_ALERT_COOLDOWN_MINUTES);
+    expect(config.alertCooldownSeconds).toBe(DEFAULT_ALERT_COOLDOWN_MINUTES * 60);
     expect(config.addressBookPath).toBe("addresses.txt");
     expect(config.blacklistedMethods).toEqual([]);
     expect(config.mintRouterContracts).toEqual(DEFAULT_MINT_ROUTER_CONTRACTS);
@@ -66,6 +73,21 @@ describe("parseRuntimeConfig", () => {
     );
 
     expect(config.blacklistedMethods).toEqual(["setApprovalForAll", "0xa22cb465"]);
+  });
+
+  test("accepts alert cooldown minutes", () => {
+    const config = parseRuntimeConfig(
+      {
+        windowMinutes: 5,
+        alertCooldownMinutes: 15,
+        minUniqueAddresses: 1,
+        pollIntervalMs: 12000,
+      },
+      env,
+    );
+
+    expect(config.alertCooldownMinutes).toBe(15);
+    expect(config.alertCooldownSeconds).toBe(900);
   });
 
   test("allows disabling default mint router contracts", () => {
@@ -179,6 +201,20 @@ describe("parseRuntimeConfig", () => {
     ).toThrow("windowMinutes must be a positive number");
   });
 
+  test("rejects invalid alert cooldowns", () => {
+    expect(() =>
+      parseRuntimeConfig(
+        {
+          windowMinutes: 5,
+          alertCooldownMinutes: 0,
+          minUniqueAddresses: 1,
+          pollIntervalMs: 12000,
+        },
+        env,
+      ),
+    ).toThrow("alertCooldownMinutes must be a positive number");
+  });
+
   test("rejects invalid method blacklists", () => {
     expect(() =>
       parseRuntimeConfig(
@@ -224,6 +260,7 @@ describe("parseConfig", () => {
     expect(config.blacklistedContracts).toEqual(addressBook.blacklistedContracts);
     expect(config.blacklistedMethods).toEqual([]);
     expect(config.mintRouterContracts).toEqual(DEFAULT_MINT_ROUTER_CONTRACTS);
+    expect(config.alertCooldownSeconds).toBe(DEFAULT_ALERT_COOLDOWN_MINUTES * 60);
   });
 
   test("rejects impossible unique-address thresholds", () => {

@@ -29,7 +29,7 @@ describe("formatTelegramAlert", () => {
 
   test("adds an OpenSea link beside the contract link for NFT alerts", () => {
     const openSeaUrl =
-      "https://opensea.io/assets/ethereum/0x00000000000000000000000000000000000000aa/1";
+      "https://opensea.io/assets/ethereum/0x00000000000000000000000000000000000000aa";
     const message = formatTelegramAlert(alert({ openSeaUrl }));
 
     expect(message).toContain(

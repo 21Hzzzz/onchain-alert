@@ -28,7 +28,7 @@ curl -fsSL https://raw.githubusercontent.com/21Hzzzz/onchain-radar/main/deploy.s
 radar update
 ```
 
-更新命令会自动备份 `.env`、`addresses.txt`、`config.json`，拉取 `origin/main`，安装依赖，执行类型检查和测试，通过后重启服务。若更新或校验失败，脚本会尝试回退到更新前版本并恢复运行配置。
+更新命令只会自动备份 `.env`，拉取 `origin/main`，安装依赖，执行类型检查和测试，通过后重启服务。`addresses.txt` 和 `config.json` 会随仓库版本更新；若更新或校验失败，脚本会尝试回退到更新前版本并恢复 `.env`。
 
 ### 一键删除
 
@@ -85,6 +85,7 @@ TELEGRAM_CHAT_ID=-1001234567890
 ```json
 {
   "windowMinutes": 5,
+  "alertCooldownMinutes": 30,
   "minUniqueAddresses": 3,
   "pollIntervalMs": 12000,
   "blacklistedMethods": [
@@ -102,6 +103,7 @@ TELEGRAM_CHAT_ID=-1001234567890
 配置字段含义：
 
 - `windowMinutes`：滑动时间窗口，单位为分钟。
+- `alertCooldownMinutes`：同一个合约两次告警之间的冷却时间，单位为分钟；NFT mint 路由会按真实 NFT 合约冷却。
 - `minUniqueAddresses`：触发告警所需的不同观察地址数量。
 - `pollIntervalMs`：轮询最新区块的间隔，单位为毫秒。
 - `blacklistedMethods`：合约方法黑名单，命中的交易不会计入告警统计；支持 Etherscan 展示名或 `0x` 开头的 4-byte selector。

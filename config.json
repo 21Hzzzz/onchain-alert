@@ -1,5 +1,6 @@
 {
   "windowMinutes": 5,
+  "alertCooldownMinutes": 10,
   "minUniqueAddresses": 50,
   "pollIntervalMs": 12000,
   "blacklistedMethods": [

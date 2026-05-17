@@ -8,6 +8,7 @@ import { loadDotEnvFile, mergeEnvFiles } from "./env.ts";
 export const DEFAULT_MINT_ROUTER_CONTRACTS = [
   "0x00005EA00Ac477B1030CE78506496e8C2dE24bf5",
 ] as const satisfies readonly Address[];
+export const DEFAULT_ALERT_COOLDOWN_MINUTES = 30;
 
 export type MonitorConfig = {
   rpcUrl: string;
@@ -16,6 +17,8 @@ export type MonitorConfig = {
   telegramChatId: string;
   windowMinutes: number;
   windowSeconds: number;
+  alertCooldownMinutes: number;
+  alertCooldownSeconds: number;
   minUniqueAddresses: number;
   pollIntervalMs: number;
   addressBookPath: string;
@@ -94,6 +97,9 @@ export function parseRuntimeConfig(
   }
 
   const windowMinutes = parsePositiveNumber(rawConfig, "windowMinutes");
+  const alertCooldownMinutes =
+    parseOptionalPositiveNumber(rawConfig, "alertCooldownMinutes") ??
+    DEFAULT_ALERT_COOLDOWN_MINUTES;
   const minUniqueAddresses = parsePositiveInteger(rawConfig, "minUniqueAddresses");
   const pollIntervalMs = parsePositiveInteger(rawConfig, "pollIntervalMs");
   const addressBookPath = parseOptionalString(rawConfig, "addressBookPath") ?? "addresses.txt";
@@ -108,6 +114,8 @@ export function parseRuntimeConfig(
     telegramChatId,
     windowMinutes,
     windowSeconds: windowMinutes * 60,
+    alertCooldownMinutes,
+    alertCooldownSeconds: alertCooldownMinutes * 60,
     minUniqueAddresses,
     pollIntervalMs,
     addressBookPath,
@@ -138,6 +146,14 @@ function parsePositiveNumber(rawConfig: RawConfig, fieldName: string): number {
   }
 
   return value;
+}
+
+function parseOptionalPositiveNumber(rawConfig: RawConfig, fieldName: string): number | undefined {
+  if (rawConfig[fieldName] === undefined) {
+    return undefined;
+  }
+
+  return parsePositiveNumber(rawConfig, fieldName);
 }
 
 function parsePositiveInteger(rawConfig: RawConfig, fieldName: string): number {
