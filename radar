@@ -10,6 +10,8 @@ SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 GLOBAL_COMMAND="/usr/local/bin/radar"
 BUN_BIN="/root/.bun/bin/bun"
 CONFIG_FILES=(".env" "addresses.txt" "config.json")
+VALIDATION_TIMEOUT_SECONDS=120
+SERVICE_OPERATION_TIMEOUT_SECONDS=45
 
 log() {
   printf '[%s] %s\n' "$APP_NAME" "$*"
@@ -27,6 +29,8 @@ onchain-radar 运维命令
 用法：
   radar update          拉取最新代码、校验并重启服务
   radar uninstall --yes 停止服务并彻底删除 /root/onchain-radar
+  radar start           启动服务
+  radar stop            停止服务
   radar status          查看 systemd 服务状态
   radar logs            实时查看服务日志
   radar restart         重启服务
@@ -141,12 +145,15 @@ WRAPPER
 
 run_validation() {
   cd "$APP_DIR" || return
-  "$BUN_BIN" ./node_modules/typescript/lib/tsc.js --noEmit || return
-  "$BUN_BIN" test || return
+  log "Running TypeScript check..."
+  timeout "$VALIDATION_TIMEOUT_SECONDS" "$BUN_BIN" ./node_modules/typescript/lib/tsc.js --noEmit || return
+  log "Running test suite..."
+  timeout "$VALIDATION_TIMEOUT_SECONDS" "$BUN_BIN" test || return
 }
 
 install_dependencies() {
   cd "$APP_DIR" || return
+  log "Installing project dependencies..."
   "$BUN_BIN" install --frozen-lockfile || return
 }
 
@@ -160,10 +167,10 @@ rollback_update() {
   ensure_script_permissions || log "WARNING: failed to restore script permissions."
   install_global_command || log "WARNING: failed to restore global radar command."
   install_dependencies || log "WARNING: failed to reinstall dependencies after rollback."
-  systemctl restart "$APP_NAME" || log "WARNING: failed to restart service after rollback."
+  timeout "$SERVICE_OPERATION_TIMEOUT_SECONDS" systemctl restart "$APP_NAME" || log "WARNING: failed to restart service after rollback."
 }
 
-run_update_steps() {
+sync_repository_for_update() {
   local backup_dir="$1"
 
   reset_tracked_runtime_files || return
@@ -174,9 +181,69 @@ run_update_steps() {
   restore_runtime_config "$backup_dir" || return
   ensure_script_permissions || return
   install_global_command || return
+}
+
+run_post_update_steps() {
   install_dependencies || return
   run_validation || return
-  systemctl restart "$APP_NAME" || return
+  log "Restarting service..."
+  timeout "$SERVICE_OPERATION_TIMEOUT_SECONDS" systemctl restart "$APP_NAME" || return
+}
+
+reload_updated_radar() {
+  local previous_commit="$1"
+  local backup_dir="$2"
+
+  if [[ "${RADAR_UPDATE_REEXECED:-}" == "1" ]]; then
+    return
+  fi
+
+  if [[ ! -x "$APP_DIR/radar" ]]; then
+    return
+  fi
+
+  log "Reloading updated radar script..."
+  export RADAR_UPDATE_REEXECED=1
+  if exec "$APP_DIR/radar" __continue_update "$previous_commit" "$backup_dir"; then
+    return
+  fi
+
+  log "WARNING: failed to reload updated radar script; continuing in current process."
+}
+
+run_update_steps() {
+  local previous_commit="$1"
+  local backup_dir="$2"
+
+  sync_repository_for_update "$backup_dir" || return
+  reload_updated_radar "$previous_commit" "$backup_dir"
+  run_post_update_steps || return
+}
+
+assert_backup_dir() {
+  local backup_dir="$1"
+
+  if [[ "$backup_dir" != /tmp/onchain-radar-update.* || ! -d "$backup_dir" ]]; then
+    die "Refusing to use unexpected backup directory: $backup_dir"
+  fi
+}
+
+finish_update_success() {
+  local backup_dir="$1"
+
+  assert_backup_dir "$backup_dir"
+  rm -rf -- "$backup_dir"
+  log "Update completed."
+}
+
+finish_update_failure() {
+  local previous_commit="$1"
+  local backup_dir="$2"
+
+  assert_backup_dir "$backup_dir"
+  rollback_update "$previous_commit" "$backup_dir"
+  rm -rf -- "$backup_dir"
+  die "Update failed and rollback was attempted."
 }
 
 update_app() {
@@ -190,19 +257,38 @@ update_app() {
   local backup_dir
 
   previous_commit="$(git -C "$APP_DIR" rev-parse HEAD)"
-  backup_dir="$(mktemp -d)"
+  backup_dir="$(mktemp -d /tmp/onchain-radar-update.XXXXXXXXXX)"
 
   backup_runtime_config "$backup_dir"
 
-  if run_update_steps "$backup_dir"; then
-    rm -rf -- "$backup_dir"
-    log "Update completed."
+  if run_update_steps "$previous_commit" "$backup_dir"; then
+    finish_update_success "$backup_dir"
     return
   fi
 
-  rollback_update "$previous_commit" "$backup_dir"
-  rm -rf -- "$backup_dir"
-  die "Update failed and rollback was attempted."
+  finish_update_failure "$previous_commit" "$backup_dir"
+}
+
+continue_update() {
+  require_root
+  require_systemd
+  assert_safe_targets
+  require_app_repository
+  ensure_bun
+
+  local previous_commit="${1:-}"
+  local backup_dir="${2:-}"
+
+  if [[ -z "$previous_commit" || -z "$backup_dir" ]]; then
+    die "Internal update continuation requires previous commit and backup directory."
+  fi
+
+  if run_post_update_steps; then
+    finish_update_success "$backup_dir"
+    return
+  fi
+
+  finish_update_failure "$previous_commit" "$backup_dir"
 }
 
 confirm_uninstall() {
@@ -265,10 +351,27 @@ show_logs() {
   journalctl -u "$APP_NAME" -f
 }
 
+start_service() {
+  require_root
+  require_systemd
+  log "Starting service..."
+  timeout "$SERVICE_OPERATION_TIMEOUT_SECONDS" systemctl start "$APP_NAME"
+  systemctl status "$APP_NAME" --no-pager
+}
+
+stop_service() {
+  require_root
+  require_systemd
+  log "Stopping service..."
+  timeout "$SERVICE_OPERATION_TIMEOUT_SECONDS" systemctl stop "$APP_NAME"
+  systemctl status "$APP_NAME" --no-pager || true
+}
+
 restart_service() {
   require_root
   require_systemd
-  systemctl restart "$APP_NAME"
+  log "Restarting service..."
+  timeout "$SERVICE_OPERATION_TIMEOUT_SECONDS" systemctl restart "$APP_NAME"
   systemctl status "$APP_NAME" --no-pager
 }
 
@@ -280,8 +383,17 @@ main() {
     update)
       update_app "$@"
       ;;
+    __continue_update)
+      continue_update "$@"
+      ;;
     uninstall)
       uninstall_app "$@"
+      ;;
+    start)
+      start_service "$@"
+      ;;
+    stop)
+      stop_service "$@"
       ;;
     status)
       show_status "$@"

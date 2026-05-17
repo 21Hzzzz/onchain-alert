@@ -246,6 +246,8 @@ main() {
   log "Deployment completed."
   log "Update: radar update"
   log "Uninstall: radar uninstall --yes"
+  log "Start service: radar start"
+  log "Stop service: radar stop"
   log "Check status: radar status"
   log "Follow logs: radar logs"
 }

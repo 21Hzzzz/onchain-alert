@@ -43,6 +43,8 @@ radar uninstall --yes
 ### 日常运维
 
 ```bash
+radar start
+radar stop
 radar status
 radar logs
 radar restart
