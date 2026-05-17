@@ -9,7 +9,10 @@ import { createEtherscanMethodResolver } from "./etherscan.ts";
 import { runStartupHealthChecks } from "./health.ts";
 import { buildMethodBlacklist, type MethodBlacklist } from "./methods.ts";
 import { formatAlertForConsole } from "./output.ts";
-import { extractDirectContractInteractions } from "./scanner.ts";
+import {
+  extractDirectContractInteractions,
+  type TransactionReceiptResolver,
+} from "./scanner.ts";
 import { sendTelegramAlert, type TelegramConfig } from "./telegram.ts";
 
 type EthereumPublicClient = ReturnType<typeof createPublicClient>;
@@ -25,6 +28,7 @@ export async function runMonitor(config: MonitorConfig): Promise<void> {
   });
   const watchedAddressKeys = buildWatchedAddressSet(config.watchedAddresses);
   const blacklistedContractKeys = buildWatchedAddressSet(config.blacklistedContracts);
+  const mintRouterContractKeys = buildWatchedAddressSet(config.mintRouterContracts);
   const blacklistedMethods = buildMethodBlacklist(config.blacklistedMethods);
   const addressRemarks = buildAddressRemarkMap(config.watchedAddresses);
   const detector = new CollectiveInteractionDetector({
@@ -41,6 +45,7 @@ export async function runMonitor(config: MonitorConfig): Promise<void> {
     chainId: 1,
   });
   const isContractAddress = createContractCodeResolver(client);
+  const getTransactionReceipt = createTransactionReceiptResolver(client);
 
   const { latestBlockNumber } = await runStartupHealthChecks({
     client,
@@ -70,11 +75,13 @@ export async function runMonitor(config: MonitorConfig): Promise<void> {
         blockNumber: nextBlockNumber,
         watchedAddressKeys,
         blacklistedContractKeys,
+        mintRouterContractKeys,
         blacklistedMethods,
         detector,
         telegramConfig,
         resolveMethodName,
         isContractAddress,
+        getTransactionReceipt,
       });
       console.info(
         `Scanned block ${nextBlockNumber.toString()} / latest ${currentLatestBlockNumber.toString()} | interactions=${result.interactionCount} alerts=${result.alertCount}`,
@@ -91,21 +98,25 @@ async function processBlock({
   blockNumber,
   watchedAddressKeys,
   blacklistedContractKeys,
+  mintRouterContractKeys,
   blacklistedMethods,
   detector,
   telegramConfig,
   resolveMethodName,
   isContractAddress,
+  getTransactionReceipt,
 }: {
   client: EthereumPublicClient;
   blockNumber: bigint;
   watchedAddressKeys: ReadonlySet<string>;
   blacklistedContractKeys: ReadonlySet<string>;
+  mintRouterContractKeys: ReadonlySet<string>;
   blacklistedMethods: MethodBlacklist;
   detector: CollectiveInteractionDetector;
   telegramConfig: TelegramConfig;
   resolveMethodName: Parameters<typeof extractDirectContractInteractions>[4];
   isContractAddress: (address: Address, blockNumber: bigint) => Promise<boolean>;
+  getTransactionReceipt: TransactionReceiptResolver;
 }): Promise<ProcessBlockResult> {
   const block = await client.getBlock({
     blockNumber,
@@ -119,6 +130,8 @@ async function processBlock({
     isContractAddress,
     resolveMethodName,
     blacklistedMethods,
+    mintRouterContractKeys,
+    getTransactionReceipt,
   );
   const alerts = detector.recordInteractions(interactions, blockTimestamp);
 
@@ -144,6 +157,22 @@ function createContractCodeResolver(client: EthereumPublicClient) {
       blockNumber,
     });
     return bytecode !== undefined && bytecode !== "0x";
+  };
+}
+
+function createTransactionReceiptResolver(client: EthereumPublicClient): TransactionReceiptResolver {
+  return async function getTransactionReceipt(transactionHash) {
+    const receipt = await client.getTransactionReceipt({
+      hash: transactionHash,
+    });
+
+    return {
+      status: receipt.status,
+      logs: receipt.logs.map((log) => ({
+        address: log.address,
+        topics: log.topics,
+      })),
+    };
   };
 }
 

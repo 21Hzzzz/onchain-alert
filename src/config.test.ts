@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { getAddress } from "viem";
 import type { AddressBook } from "./addressBook.ts";
-import { parseConfig, parseRuntimeConfig } from "./config.ts";
+import { DEFAULT_MINT_ROUTER_CONTRACTS, parseConfig, parseRuntimeConfig } from "./config.ts";
 
 const ETH_RPC_HTTP_URL = "https://example.invalid/rpc";
 const ETHERSCAN_API_KEY = "etherscan-api-key";
@@ -37,6 +37,7 @@ describe("parseRuntimeConfig", () => {
     expect(config.windowSeconds).toBe(300);
     expect(config.addressBookPath).toBe("addresses.txt");
     expect(config.blacklistedMethods).toEqual([]);
+    expect(config.mintRouterContracts).toEqual(DEFAULT_MINT_ROUTER_CONTRACTS);
   });
 
   test("accepts a custom addressBookPath", () => {
@@ -65,6 +66,36 @@ describe("parseRuntimeConfig", () => {
     );
 
     expect(config.blacklistedMethods).toEqual(["setApprovalForAll", "0xa22cb465"]);
+  });
+
+  test("allows disabling default mint router contracts", () => {
+    const config = parseRuntimeConfig(
+      {
+        windowMinutes: 5,
+        minUniqueAddresses: 1,
+        pollIntervalMs: 12000,
+        mintRouterContracts: [],
+      },
+      env,
+    );
+
+    expect(config.mintRouterContracts).toEqual([]);
+  });
+
+  test("accepts custom mint router contracts", () => {
+    const config = parseRuntimeConfig(
+      {
+        windowMinutes: 5,
+        minUniqueAddresses: 1,
+        pollIntervalMs: 12000,
+        mintRouterContracts: [" 0x00000000000000000000000000000000000000aa "],
+      },
+      env,
+    );
+
+    expect(config.mintRouterContracts).toEqual([
+      getAddress("0x00000000000000000000000000000000000000aa"),
+    ]);
   });
 
   test("requires ETH_RPC_HTTP_URL", () => {
@@ -161,6 +192,20 @@ describe("parseRuntimeConfig", () => {
       ),
     ).toThrow("blacklistedMethods[1] must be a non-empty string");
   });
+
+  test("rejects invalid mint router contracts", () => {
+    expect(() =>
+      parseRuntimeConfig(
+        {
+          windowMinutes: 5,
+          minUniqueAddresses: 1,
+          pollIntervalMs: 12000,
+          mintRouterContracts: ["not-an-address"],
+        },
+        env,
+      ),
+    ).toThrow("mintRouterContracts[0] must be a valid Ethereum address");
+  });
 });
 
 describe("parseConfig", () => {
@@ -178,6 +223,7 @@ describe("parseConfig", () => {
     expect(config.watchedAddresses).toEqual(addressBook.watchedAddresses);
     expect(config.blacklistedContracts).toEqual(addressBook.blacklistedContracts);
     expect(config.blacklistedMethods).toEqual([]);
+    expect(config.mintRouterContracts).toEqual(DEFAULT_MINT_ROUTER_CONTRACTS);
   });
 
   test("rejects impossible unique-address thresholds", () => {

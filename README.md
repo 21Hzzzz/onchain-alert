@@ -1,6 +1,6 @@
 # onchain-radar
 
-Ethereum 主网地址集体行为监控器。程序会通过 HTTP RPC 轮询新区块，当足够多的被监控地址在配置的时间窗口内直接与同一个合约交互时，向控制台打印 JSON 告警，并通过 Telegram bot 发送到指定群组。
+Ethereum 主网地址集体行为监控器。程序会通过 HTTP RPC 轮询新区块，当足够多的被监控地址在配置的时间窗口内与同一个合约交互时，向控制台打印 JSON 告警，并通过 Telegram bot 发送到指定群组。对于 SeaDrop 这类统一 mint 路由合约，程序会从交易回执解析真实 mint 的 NFT 合约，并按真实 NFT 合约聚合告警。
 
 ## Ubuntu 服务器运维
 
@@ -90,6 +90,9 @@ TELEGRAM_CHAT_ID=-1001234567890
     "0x42842e0e",
     "0xb88d4fde"
   ],
+  "mintRouterContracts": [
+    "0x00005EA00Ac477B1030CE78506496e8C2dE24bf5"
+  ],
   "addressBookPath": "addresses.txt"
 }
 ```
@@ -100,6 +103,7 @@ TELEGRAM_CHAT_ID=-1001234567890
 - `minUniqueAddresses`：触发告警所需的不同观察地址数量。
 - `pollIntervalMs`：轮询最新区块的间隔，单位为毫秒。
 - `blacklistedMethods`：合约方法黑名单，命中的交易不会计入告警统计；支持 Etherscan 展示名或 `0x` 开头的 4-byte selector。
+- `mintRouterContracts`：mint 路由合约列表。命中后会从交易回执解析 ERC721/ERC1155 mint 事件，并把告警归到真实 NFT 合约；显式写成空数组可关闭默认 SeaDrop 解析。
 - `addressBookPath`：观察地址和合约黑名单文件路径，默认是 `addresses.txt`。
 
 ## 地址文件
@@ -140,7 +144,7 @@ TELEGRAM_CHAT_ID=-1001234567890
 
 Telegram 消息会包含：
 
-- 合约地址的 Etherscan 可点击链接。
+- 合约地址的 Etherscan 可点击链接；如果交易经过 mint 路由合约，这里显示真实 mint 的 NFT 合约。
 - 窗口大小、触发阈值和参与地址数量。
 - 首次交互时间和最近交互时间，格式为 `UTC+8`。
 - 触发区块的 Etherscan 可点击链接。

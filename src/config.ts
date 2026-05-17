@@ -1,8 +1,13 @@
 import type { Address } from "viem";
 import { dirname, isAbsolute, resolve } from "node:path";
+import { normalizeAddress } from "./address.ts";
 import type { AddressBook, AddressEntry } from "./addressBook.ts";
 import { loadAddressBook } from "./addressBook.ts";
 import { loadDotEnvFile, mergeEnvFiles } from "./env.ts";
+
+export const DEFAULT_MINT_ROUTER_CONTRACTS = [
+  "0x00005EA00Ac477B1030CE78506496e8C2dE24bf5",
+] as const satisfies readonly Address[];
 
 export type MonitorConfig = {
   rpcUrl: string;
@@ -15,6 +20,7 @@ export type MonitorConfig = {
   pollIntervalMs: number;
   addressBookPath: string;
   blacklistedMethods: readonly string[];
+  mintRouterContracts: readonly Address[];
   blacklistedContracts: readonly AddressEntry[];
   watchedAddresses: readonly AddressEntry[];
 };
@@ -92,6 +98,8 @@ export function parseRuntimeConfig(
   const pollIntervalMs = parsePositiveInteger(rawConfig, "pollIntervalMs");
   const addressBookPath = parseOptionalString(rawConfig, "addressBookPath") ?? "addresses.txt";
   const blacklistedMethods = parseOptionalStringArray(rawConfig, "blacklistedMethods") ?? [];
+  const mintRouterContracts =
+    parseOptionalAddressArray(rawConfig, "mintRouterContracts") ?? DEFAULT_MINT_ROUTER_CONTRACTS;
 
   return {
     rpcUrl,
@@ -104,6 +112,7 @@ export function parseRuntimeConfig(
     pollIntervalMs,
     addressBookPath,
     blacklistedMethods,
+    mintRouterContracts,
   };
 }
 
@@ -173,6 +182,24 @@ function parseOptionalStringArray(
 
     return entry.trim();
   });
+}
+
+function parseOptionalAddressArray(
+  rawConfig: RawConfig,
+  fieldName: string,
+): readonly Address[] | undefined {
+  const value = rawConfig[fieldName];
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array of Ethereum addresses`);
+  }
+
+  return value.map((entry, index) =>
+    normalizeAddress(typeof entry === "string" ? entry.trim() : entry, `${fieldName}[${index}]`),
+  );
 }
 
 function rejectMovedAddressFields(rawConfig: RawConfig): void {

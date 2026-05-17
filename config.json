@@ -1,11 +1,14 @@
 {
   "windowMinutes": 5,
-  "minUniqueAddresses": 3,
+  "minUniqueAddresses": 50,
   "pollIntervalMs": 12000,
   "blacklistedMethods": [
     "setApprovalForAll",
     "0x42842e0e",
     "0xb88d4fde"
+  ],
+  "mintRouterContracts": [
+    "0x00005EA00Ac477B1030CE78506496e8C2dE24bf5"
   ],
   "addressBookPath": "addresses.txt"
 }
