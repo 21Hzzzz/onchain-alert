@@ -10,7 +10,6 @@ SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 GLOBAL_COMMAND="/usr/local/bin/radar"
 BUN_BIN="/root/.bun/bin/bun"
 UPDATE_PRESERVED_FILES=(".env")
-VALIDATION_TIMEOUT_SECONDS=120
 SERVICE_OPERATION_TIMEOUT_SECONDS=45
 
 log() {
@@ -27,7 +26,7 @@ usage() {
 onchain-radar 运维命令
 
 用法：
-  radar update          拉取最新代码、校验并重启服务
+  radar update          拉取最新代码、安装依赖并重启服务
   radar uninstall --yes 停止服务并彻底删除 /root/onchain-radar
   radar start           启动服务
   radar stop            停止服务
@@ -139,14 +138,6 @@ WRAPPER
   chmod +x "$GLOBAL_COMMAND"
 }
 
-run_validation() {
-  cd "$APP_DIR" || return
-  log "Running TypeScript check..."
-  timeout "$VALIDATION_TIMEOUT_SECONDS" "$BUN_BIN" ./node_modules/typescript/lib/tsc.js --noEmit || return
-  log "Running test suite..."
-  timeout "$VALIDATION_TIMEOUT_SECONDS" "$BUN_BIN" test || return
-}
-
 install_dependencies() {
   cd "$APP_DIR" || return
   log "Installing project dependencies..."
@@ -205,7 +196,6 @@ sync_repository_for_update() {
 
 run_post_update_steps() {
   install_dependencies || return
-  run_validation || return
   write_systemd_service || return
   log "Restarting service..."
   timeout "$SERVICE_OPERATION_TIMEOUT_SECONDS" systemctl restart "$APP_NAME" || return

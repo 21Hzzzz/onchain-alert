@@ -28,7 +28,7 @@ curl -fsSL https://raw.githubusercontent.com/21Hzzzz/onchain-radar/main/deploy.s
 radar update
 ```
 
-更新命令只会自动备份 `.env`，拉取 `origin/main`，安装依赖，执行类型检查和测试，通过后重启服务。`addresses.txt` 和 `config.json` 会随仓库版本更新；若更新或校验失败，脚本会尝试回退到更新前版本并恢复 `.env`。
+更新命令只会自动备份 `.env`，拉取 `origin/main`，安装依赖，通过后重启服务。`addresses.txt` 和 `config.json` 会随仓库版本更新；若更新失败，脚本会尝试回退到更新前版本并恢复 `.env`。
 
 ### 一键删除
 
