@@ -2,5 +2,10 @@
   "windowMinutes": 5,
   "minUniqueAddresses": 3,
   "pollIntervalMs": 12000,
+  "blacklistedMethods": [
+    "setApprovalForAll",
+    "0x42842e0e",
+    "0xb88d4fde"
+  ],
   "addressBookPath": "addresses.txt"
 }

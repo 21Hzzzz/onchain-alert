@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { Address, Hash } from "viem";
+import type { Address, Hash, Hex } from "viem";
 import { buildWatchedAddressSet } from "./address.ts";
+import { buildMethodBlacklist } from "./methods.ts";
 import { extractDirectContractInteractions, type ScannableTransaction } from "./scanner.ts";
 
 const WATCHED_ONE = "0x0000000000000000000000000000000000000001" as Address;
@@ -100,6 +101,36 @@ describe("extractDirectContractInteractions", () => {
     expect(interactions).toHaveLength(1);
   });
 
+  test("ignores blacklisted methods after resolving method names", async () => {
+    const interactions = await extractDirectContractInteractions(
+      {
+        number: 100n,
+        timestamp: 1000n,
+        transactions: [
+          tx(1, WATCHED_ONE, CONTRACT, "0xa22cb4650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"),
+          tx(2, WATCHED_TWO, CONTRACT),
+        ],
+      },
+      buildWatchedAddressSet([WATCHED_ONE, WATCHED_TWO]),
+      new Set(),
+      async () => true,
+      async (_contractAddress, input) =>
+        input.startsWith("0xa22cb465")
+          ? {
+              methodSelector: "0xa22cb465",
+              methodName: "setApprovalForAll",
+            }
+          : {
+              methodSelector: "0x40c10f19",
+              methodName: "Mint",
+            },
+      buildMethodBlacklist(["setApprovalForAll"]),
+    );
+
+    expect(interactions).toHaveLength(1);
+    expect(interactions[0]?.from).toBe(WATCHED_TWO);
+  });
+
   test("rejects pending blocks without a block number", async () => {
     await expect(
       extractDirectContractInteractions(
@@ -116,12 +147,17 @@ describe("extractDirectContractInteractions", () => {
   });
 });
 
-function tx(nonce: number, from: Address, to: Address | null): ScannableTransaction {
+function tx(
+  nonce: number,
+  from: Address,
+  to: Address | null,
+  input: Hex = "0x40c10f190000000000000000000000000000000000000000000000000000000000000001",
+): ScannableTransaction {
   return {
     hash: hash(nonce),
     from,
     to,
-    input: "0x40c10f190000000000000000000000000000000000000000000000000000000000000001",
+    input,
   };
 }
 

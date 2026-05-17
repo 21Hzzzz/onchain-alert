@@ -1,5 +1,5 @@
 {
-  "name": "onchain-alert",
+  "name": "onchain-radar",
   "module": "index.ts",
   "type": "module",
   "private": true,

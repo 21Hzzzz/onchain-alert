@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { extractMethodSelector, methodNameForInput } from "./methods.ts";
+import {
+  buildMethodBlacklist,
+  extractMethodSelector,
+  isMethodBlacklisted,
+  methodNameForInput,
+} from "./methods.ts";
 
 describe("extractMethodSelector", () => {
   test("extracts the four-byte selector", () => {
@@ -22,6 +27,11 @@ describe("methodNameForInput", () => {
         "0x095ea7b30000000000000000000000000000000000000000000000000000000000000000",
       ),
     ).toBe("approve");
+    expect(
+      methodNameForInput(
+        "0xa22cb4650000000000000000000000000000000000000000000000000000000000000000",
+      ),
+    ).toBe("setApprovalForAll");
   });
 
   test("falls back to unknown(selector)", () => {
@@ -30,5 +40,53 @@ describe("methodNameForInput", () => {
 
   test("labels empty calldata as fallback/receive", () => {
     expect(methodNameForInput("0x")).toBe("fallback/receive");
+  });
+});
+
+describe("method blacklist", () => {
+  test("matches method names case-insensitively", () => {
+    const blacklist = buildMethodBlacklist([" setApprovalForAll "]);
+
+    expect(
+      isMethodBlacklisted(
+        {
+          methodSelector: "0xa22cb465",
+          methodName: "setApprovalForAll",
+        },
+        blacklist,
+      ),
+    ).toBe(true);
+  });
+
+  test("matches method selectors", () => {
+    const blacklist = buildMethodBlacklist(["0xa22cb465", "0x42842e0e", "0xb88d4fde"]);
+
+    expect(
+      isMethodBlacklisted(
+        {
+          methodSelector: "0xa22cb465",
+          methodName: "unknown(0xa22cb465)",
+        },
+        blacklist,
+      ),
+    ).toBe(true);
+    expect(
+      isMethodBlacklisted(
+        {
+          methodSelector: "0x42842e0e",
+          methodName: "safeTransferFrom",
+        },
+        blacklist,
+      ),
+    ).toBe(true);
+    expect(
+      isMethodBlacklisted(
+        {
+          methodSelector: "0xb88d4fde",
+          methodName: "safeTransferFrom",
+        },
+        blacklist,
+      ),
+    ).toBe(true);
   });
 });

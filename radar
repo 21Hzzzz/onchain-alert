@@ -1,0 +1,305 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+APP_NAME="onchain-radar"
+REPO_URL="https://github.com/21Hzzzz/onchain-radar.git"
+REMOTE_NAME="origin"
+REMOTE_BRANCH="main"
+APP_DIR="/root/onchain-radar"
+SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
+GLOBAL_COMMAND="/usr/local/bin/radar"
+BUN_BIN="/root/.bun/bin/bun"
+CONFIG_FILES=(".env" "addresses.txt" "config.json")
+
+log() {
+  printf '[%s] %s\n' "$APP_NAME" "$*"
+}
+
+die() {
+  printf '[%s] ERROR: %s\n' "$APP_NAME" "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<USAGE
+onchain-radar 运维命令
+
+用法：
+  radar update          拉取最新代码、校验并重启服务
+  radar uninstall --yes 停止服务并彻底删除 /root/onchain-radar
+  radar status          查看 systemd 服务状态
+  radar logs            实时查看服务日志
+  radar restart         重启服务
+  radar help            显示帮助
+
+说明：
+  目标环境固定为 root 用户的 Ubuntu 服务器。
+  卸载会删除 systemd 服务、全局 radar 命令和项目目录，不保留 .env、addresses.txt、config.json。
+USAGE
+}
+
+require_root() {
+  if [[ "$(id -u)" != "0" ]]; then
+    die "This command must be run as root."
+  fi
+}
+
+require_systemd() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    die "systemctl was not found. This script targets Ubuntu servers with systemd."
+  fi
+}
+
+assert_safe_targets() {
+  if [[ "$APP_DIR" != "/root/onchain-radar" ]]; then
+    die "Refusing to operate on unexpected APP_DIR: $APP_DIR"
+  fi
+
+  if [[ "$SERVICE_FILE" != "/etc/systemd/system/onchain-radar.service" ]]; then
+    die "Refusing to operate on unexpected SERVICE_FILE: $SERVICE_FILE"
+  fi
+
+  if [[ "$GLOBAL_COMMAND" != "/usr/local/bin/radar" ]]; then
+    die "Refusing to operate on unexpected GLOBAL_COMMAND: $GLOBAL_COMMAND"
+  fi
+}
+
+require_app_repository() {
+  if [[ ! -d "$APP_DIR/.git" ]]; then
+    die "$APP_DIR is not a git repository. Run deploy.sh first."
+  fi
+}
+
+ensure_bun() {
+  if [[ ! -x "$BUN_BIN" ]]; then
+    die "Bun was not found at $BUN_BIN. Run deploy.sh first."
+  fi
+}
+
+backup_runtime_config() {
+  local backup_dir="$1"
+
+  mkdir -p "$backup_dir"
+  for file in "${CONFIG_FILES[@]}"; do
+    if [[ -f "$APP_DIR/$file" ]]; then
+      cp -a "$APP_DIR/$file" "$backup_dir/$file"
+    fi
+  done
+}
+
+restore_runtime_config() {
+  local backup_dir="$1"
+
+  for file in "${CONFIG_FILES[@]}"; do
+    if [[ -f "$backup_dir/$file" ]]; then
+      cp -a "$backup_dir/$file" "$APP_DIR/$file"
+    else
+      rm -f -- "$APP_DIR/$file"
+    fi
+  done
+
+  if [[ -f "$APP_DIR/.env" ]]; then
+    chmod 600 "$APP_DIR/.env"
+  fi
+}
+
+reset_tracked_runtime_files() {
+  local file
+
+  for file in "addresses.txt" "config.json"; do
+    if git -C "$APP_DIR" ls-files --error-unmatch "$file" >/dev/null 2>&1; then
+      git -C "$APP_DIR" checkout -- "$file"
+    fi
+  done
+}
+
+ensure_script_permissions() {
+  local script
+
+  for script in "deploy.sh" "radar"; do
+    if [[ -f "$APP_DIR/$script" ]]; then
+      chmod +x "$APP_DIR/$script"
+    fi
+  done
+}
+
+install_global_command() {
+  assert_safe_targets
+  log "Installing global command: $GLOBAL_COMMAND"
+  cat > "$GLOBAL_COMMAND" <<WRAPPER
+#!/usr/bin/env bash
+set -Eeuo pipefail
+APP_SCRIPT="$APP_DIR/radar"
+if [[ ! -x "\$APP_SCRIPT" ]]; then
+  printf '[%s] ERROR: operational script not found or not executable: %s\n' "$APP_NAME" "\$APP_SCRIPT" >&2
+  exit 1
+fi
+exec "\$APP_SCRIPT" "\$@"
+WRAPPER
+  chmod +x "$GLOBAL_COMMAND"
+}
+
+run_validation() {
+  cd "$APP_DIR" || return
+  "$BUN_BIN" ./node_modules/typescript/lib/tsc.js --noEmit || return
+  "$BUN_BIN" test || return
+}
+
+install_dependencies() {
+  cd "$APP_DIR" || return
+  "$BUN_BIN" install --frozen-lockfile || return
+}
+
+rollback_update() {
+  local previous_commit="$1"
+  local backup_dir="$2"
+
+  log "Update failed. Rolling back to $previous_commit..."
+  git -C "$APP_DIR" reset --hard "$previous_commit" || log "WARNING: failed to reset git repository."
+  restore_runtime_config "$backup_dir" || log "WARNING: failed to restore runtime config."
+  ensure_script_permissions || log "WARNING: failed to restore script permissions."
+  install_global_command || log "WARNING: failed to restore global radar command."
+  install_dependencies || log "WARNING: failed to reinstall dependencies after rollback."
+  systemctl restart "$APP_NAME" || log "WARNING: failed to restart service after rollback."
+}
+
+run_update_steps() {
+  local backup_dir="$1"
+
+  reset_tracked_runtime_files || return
+  git -C "$APP_DIR" remote set-url "$REMOTE_NAME" "$REPO_URL" || return
+  git -C "$APP_DIR" fetch "$REMOTE_NAME" || return
+  git -C "$APP_DIR" checkout "$REMOTE_BRANCH" || return
+  git -C "$APP_DIR" pull --ff-only "$REMOTE_NAME" "$REMOTE_BRANCH" || return
+  restore_runtime_config "$backup_dir" || return
+  ensure_script_permissions || return
+  install_global_command || return
+  install_dependencies || return
+  run_validation || return
+  systemctl restart "$APP_NAME" || return
+}
+
+update_app() {
+  require_root
+  require_systemd
+  assert_safe_targets
+  require_app_repository
+  ensure_bun
+
+  local previous_commit
+  local backup_dir
+
+  previous_commit="$(git -C "$APP_DIR" rev-parse HEAD)"
+  backup_dir="$(mktemp -d)"
+
+  backup_runtime_config "$backup_dir"
+
+  if run_update_steps "$backup_dir"; then
+    rm -rf -- "$backup_dir"
+    log "Update completed."
+    return
+  fi
+
+  rollback_update "$previous_commit" "$backup_dir"
+  rm -rf -- "$backup_dir"
+  die "Update failed and rollback was attempted."
+}
+
+confirm_uninstall() {
+  local confirm="${1:-}"
+
+  if [[ "$confirm" == "--yes" ]]; then
+    return
+  fi
+
+  if [[ -n "$confirm" ]]; then
+    die "Unknown uninstall option: $confirm"
+  fi
+
+  if [[ ! -r /dev/tty ]]; then
+    die "Uninstall requires --yes when no interactive TTY is available."
+  fi
+
+  local typed
+  read -r -p "This will permanently delete /root/onchain-radar. Type onchain-radar to confirm: " typed < /dev/tty
+  if [[ "$typed" != "$APP_NAME" ]]; then
+    die "Uninstall cancelled."
+  fi
+}
+
+uninstall_app() {
+  require_root
+  require_systemd
+  assert_safe_targets
+  confirm_uninstall "${1:-}"
+
+  log "Stopping and disabling service..."
+  systemctl stop "$APP_NAME" >/dev/null 2>&1 || true
+  systemctl disable "$APP_NAME" >/dev/null 2>&1 || true
+
+  log "Removing systemd service..."
+  rm -f -- "$SERVICE_FILE"
+  systemctl daemon-reload
+  systemctl reset-failed "$APP_NAME" >/dev/null 2>&1 || true
+
+  log "Removing global command..."
+  rm -f -- "$GLOBAL_COMMAND"
+
+  if [[ -d "$APP_DIR" ]]; then
+    log "Deleting $APP_DIR..."
+    rm -rf -- "$APP_DIR"
+  fi
+
+  log "Uninstall completed."
+}
+
+show_status() {
+  require_root
+  require_systemd
+  systemctl status "$APP_NAME" --no-pager
+}
+
+show_logs() {
+  require_root
+  require_systemd
+  journalctl -u "$APP_NAME" -f
+}
+
+restart_service() {
+  require_root
+  require_systemd
+  systemctl restart "$APP_NAME"
+  systemctl status "$APP_NAME" --no-pager
+}
+
+main() {
+  local command="${1:-help}"
+  shift || true
+
+  case "$command" in
+    update)
+      update_app "$@"
+      ;;
+    uninstall)
+      uninstall_app "$@"
+      ;;
+    status)
+      show_status "$@"
+      ;;
+    logs)
+      show_logs "$@"
+      ;;
+    restart)
+      restart_service "$@"
+      ;;
+    help|-h|--help)
+      usage
+      ;;
+    *)
+      usage >&2
+      die "Unknown command: $command"
+      ;;
+  esac
+}
+
+main "$@"

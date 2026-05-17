@@ -14,6 +14,7 @@ export type MonitorConfig = {
   minUniqueAddresses: number;
   pollIntervalMs: number;
   addressBookPath: string;
+  blacklistedMethods: readonly string[];
   blacklistedContracts: readonly AddressEntry[];
   watchedAddresses: readonly AddressEntry[];
 };
@@ -90,6 +91,7 @@ export function parseRuntimeConfig(
   const minUniqueAddresses = parsePositiveInteger(rawConfig, "minUniqueAddresses");
   const pollIntervalMs = parsePositiveInteger(rawConfig, "pollIntervalMs");
   const addressBookPath = parseOptionalString(rawConfig, "addressBookPath") ?? "addresses.txt";
+  const blacklistedMethods = parseOptionalStringArray(rawConfig, "blacklistedMethods") ?? [];
 
   return {
     rpcUrl,
@@ -101,6 +103,7 @@ export function parseRuntimeConfig(
     minUniqueAddresses,
     pollIntervalMs,
     addressBookPath,
+    blacklistedMethods,
   };
 }
 
@@ -148,6 +151,28 @@ function parseOptionalString(rawConfig: RawConfig, fieldName: string): string | 
   }
 
   return value.trim();
+}
+
+function parseOptionalStringArray(
+  rawConfig: RawConfig,
+  fieldName: string,
+): readonly string[] | undefined {
+  const value = rawConfig[fieldName];
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array of non-empty strings`);
+  }
+
+  return value.map((entry, index) => {
+    if (typeof entry !== "string" || entry.trim() === "") {
+      throw new Error(`${fieldName}[${index}] must be a non-empty string`);
+    }
+
+    return entry.trim();
+  });
 }
 
 function rejectMovedAddressFields(rawConfig: RawConfig): void {

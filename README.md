@@ -1,36 +1,59 @@
-# onchain-alert
+# onchain-radar
 
 Ethereum 主网地址集体行为监控器。程序会通过 HTTP RPC 轮询新区块，当足够多的被监控地址在配置的时间窗口内直接与同一个合约交互时，向控制台打印 JSON 告警，并通过 Telegram bot 发送到指定群组。
 
-## 一键部署
+## Ubuntu 服务器运维
 
-目标环境：root 用户登录的 Ubuntu 服务器。项目会部署到 `/root/onchain-alert`，并安装为 `onchain-alert.service` systemd 服务。
+目标环境：root 用户登录的 Ubuntu 服务器。项目会部署到 `/root/onchain-radar`，并安装为 `onchain-radar.service` systemd 服务。
+
+### 一键部署
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/21Hzzzz/onchain-alert/main/deploy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/21Hzzzz/onchain-radar/main/deploy.sh | bash
 ```
 
 脚本会自动：
 
 - 安装 `curl`、`git`、`unzip`、`ca-certificates`。
 - 安装 Bun。
-- clone 或更新 `https://github.com/21Hzzzz/onchain-alert` 到 `/root/onchain-alert`。
+- clone 或更新 `https://github.com/21Hzzzz/onchain-radar` 到 `/root/onchain-radar`。
 - 保留已有 `.env`、`addresses.txt`、`config.json`。
 - 交互式补齐 `.env` 中缺失的 RPC、Etherscan、Telegram 配置。
 - 安装依赖并启动 systemd 服务。
+- 安装全局运维命令 `radar`。
 
-常用运维命令：
+### 一键更新
 
 ```bash
-systemctl status onchain-alert
-journalctl -u onchain-alert -f
-systemctl restart onchain-alert
+radar update
 ```
 
-## 本地安装
+更新命令会自动备份 `.env`、`addresses.txt`、`config.json`，拉取 `origin/main`，安装依赖，执行类型检查和测试，通过后重启服务。若更新或校验失败，脚本会尝试回退到更新前版本并恢复运行配置。
+
+### 一键删除
+
+```bash
+radar uninstall --yes
+```
+
+删除命令会停止并禁用 `onchain-radar.service`，删除 systemd service 文件、全局 `radar` 命令，并删除 `/root/onchain-radar` 项目目录。该操作不会保留 `.env`、`addresses.txt`、`config.json`。
+
+如果不带 `--yes`，脚本会要求手工输入 `onchain-radar` 确认。
+
+### 日常运维
+
+```bash
+radar status
+radar logs
+radar restart
+```
+
+## 本地开发检查
 
 ```bash
 bun install
+bun ./node_modules/typescript/lib/tsc.js --noEmit
+bun test
 ```
 
 ## 配置 `.env`
@@ -62,6 +85,11 @@ TELEGRAM_CHAT_ID=-1001234567890
   "windowMinutes": 5,
   "minUniqueAddresses": 3,
   "pollIntervalMs": 12000,
+  "blacklistedMethods": [
+    "setApprovalForAll",
+    "0x42842e0e",
+    "0xb88d4fde"
+  ],
   "addressBookPath": "addresses.txt"
 }
 ```
@@ -71,6 +99,7 @@ TELEGRAM_CHAT_ID=-1001234567890
 - `windowMinutes`：滑动时间窗口，单位为分钟。
 - `minUniqueAddresses`：触发告警所需的不同观察地址数量。
 - `pollIntervalMs`：轮询最新区块的间隔，单位为毫秒。
+- `blacklistedMethods`：合约方法黑名单，命中的交易不会计入告警统计；支持 Etherscan 展示名或 `0x` 开头的 4-byte selector。
 - `addressBookPath`：观察地址和合约黑名单文件路径，默认是 `addresses.txt`。
 
 ## 地址文件
@@ -129,6 +158,6 @@ bun run start
 ## 检查代码
 
 ```bash
-bun run typecheck
+bun ./node_modules/typescript/lib/tsc.js --noEmit
 bun test
 ```

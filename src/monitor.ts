@@ -7,6 +7,7 @@ import type { MonitorConfig } from "./config.ts";
 import { CollectiveInteractionDetector } from "./detector.ts";
 import { createEtherscanMethodResolver } from "./etherscan.ts";
 import { runStartupHealthChecks } from "./health.ts";
+import { buildMethodBlacklist, type MethodBlacklist } from "./methods.ts";
 import { formatAlertForConsole } from "./output.ts";
 import { extractDirectContractInteractions } from "./scanner.ts";
 import { sendTelegramAlert, type TelegramConfig } from "./telegram.ts";
@@ -24,6 +25,7 @@ export async function runMonitor(config: MonitorConfig): Promise<void> {
   });
   const watchedAddressKeys = buildWatchedAddressSet(config.watchedAddresses);
   const blacklistedContractKeys = buildWatchedAddressSet(config.blacklistedContracts);
+  const blacklistedMethods = buildMethodBlacklist(config.blacklistedMethods);
   const addressRemarks = buildAddressRemarkMap(config.watchedAddresses);
   const detector = new CollectiveInteractionDetector({
     windowSeconds: config.windowSeconds,
@@ -68,6 +70,7 @@ export async function runMonitor(config: MonitorConfig): Promise<void> {
         blockNumber: nextBlockNumber,
         watchedAddressKeys,
         blacklistedContractKeys,
+        blacklistedMethods,
         detector,
         telegramConfig,
         resolveMethodName,
@@ -88,6 +91,7 @@ async function processBlock({
   blockNumber,
   watchedAddressKeys,
   blacklistedContractKeys,
+  blacklistedMethods,
   detector,
   telegramConfig,
   resolveMethodName,
@@ -97,6 +101,7 @@ async function processBlock({
   blockNumber: bigint;
   watchedAddressKeys: ReadonlySet<string>;
   blacklistedContractKeys: ReadonlySet<string>;
+  blacklistedMethods: MethodBlacklist;
   detector: CollectiveInteractionDetector;
   telegramConfig: TelegramConfig;
   resolveMethodName: Parameters<typeof extractDirectContractInteractions>[4];
@@ -113,6 +118,7 @@ async function processBlock({
     blacklistedContractKeys,
     isContractAddress,
     resolveMethodName,
+    blacklistedMethods,
   );
   const alerts = detector.recordInteractions(interactions, blockTimestamp);
 

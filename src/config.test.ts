@@ -36,6 +36,7 @@ describe("parseRuntimeConfig", () => {
     expect(config.telegramChatId).toBe(TELEGRAM_CHAT_ID);
     expect(config.windowSeconds).toBe(300);
     expect(config.addressBookPath).toBe("addresses.txt");
+    expect(config.blacklistedMethods).toEqual([]);
   });
 
   test("accepts a custom addressBookPath", () => {
@@ -50,6 +51,20 @@ describe("parseRuntimeConfig", () => {
     );
 
     expect(config.addressBookPath).toBe("lists/mainnet-addresses.txt");
+  });
+
+  test("accepts method blacklists", () => {
+    const config = parseRuntimeConfig(
+      {
+        windowMinutes: 5,
+        minUniqueAddresses: 1,
+        pollIntervalMs: 12000,
+        blacklistedMethods: [" setApprovalForAll ", "0xa22cb465"],
+      },
+      env,
+    );
+
+    expect(config.blacklistedMethods).toEqual(["setApprovalForAll", "0xa22cb465"]);
   });
 
   test("requires ETH_RPC_HTTP_URL", () => {
@@ -132,6 +147,20 @@ describe("parseRuntimeConfig", () => {
       ),
     ).toThrow("windowMinutes must be a positive number");
   });
+
+  test("rejects invalid method blacklists", () => {
+    expect(() =>
+      parseRuntimeConfig(
+        {
+          windowMinutes: 5,
+          minUniqueAddresses: 1,
+          pollIntervalMs: 12000,
+          blacklistedMethods: ["setApprovalForAll", ""],
+        },
+        env,
+      ),
+    ).toThrow("blacklistedMethods[1] must be a non-empty string");
+  });
 });
 
 describe("parseConfig", () => {
@@ -148,6 +177,7 @@ describe("parseConfig", () => {
 
     expect(config.watchedAddresses).toEqual(addressBook.watchedAddresses);
     expect(config.blacklistedContracts).toEqual(addressBook.blacklistedContracts);
+    expect(config.blacklistedMethods).toEqual([]);
   });
 
   test("rejects impossible unique-address thresholds", () => {

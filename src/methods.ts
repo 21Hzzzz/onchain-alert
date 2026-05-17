@@ -5,6 +5,11 @@ export type MethodNameResult = {
   methodName: string;
 };
 
+export type MethodBlacklist = {
+  methodNames: ReadonlySet<string>;
+  methodSelectors: ReadonlySet<string>;
+};
+
 export type MethodNameResolver = (
   contractAddress: Address,
   input: Hex,
@@ -14,6 +19,7 @@ const KNOWN_METHODS = new Map<string, string>([
   ["0xa9059cbb", "transfer"],
   ["0x095ea7b3", "approve"],
   ["0x23b872dd", "transferFrom"],
+  ["0xa22cb465", "setApprovalForAll"],
   ["0x40c10f19", "mint"],
   ["0x1249c58b", "mint"],
   ["0x42842e0e", "safeTransferFrom"],
@@ -55,4 +61,42 @@ export async function defaultMethodNameResolver(
     methodSelector: extractMethodSelector(input),
     methodName: methodNameForInput(input),
   };
+}
+
+export function buildMethodBlacklist(entries: readonly string[]): MethodBlacklist {
+  const methodNames = new Set<string>();
+  const methodSelectors = new Set<string>();
+
+  for (const entry of entries) {
+    const normalizedEntry = entry.trim();
+    if (/^0x[0-9a-fA-F]{8}$/.test(normalizedEntry)) {
+      methodSelectors.add(normalizedEntry.toLowerCase());
+      continue;
+    }
+
+    methodNames.add(normalizeMethodName(normalizedEntry));
+  }
+
+  return {
+    methodNames,
+    methodSelectors,
+  };
+}
+
+export function isMethodBlacklisted(
+  method: MethodNameResult,
+  blacklist: MethodBlacklist,
+): boolean {
+  if (
+    method.methodSelector !== undefined &&
+    blacklist.methodSelectors.has(method.methodSelector.toLowerCase())
+  ) {
+    return true;
+  }
+
+  return blacklist.methodNames.has(normalizeMethodName(method.methodName));
+}
+
+function normalizeMethodName(methodName: string): string {
+  return methodName.trim().replace(/\s+/g, " ").toLowerCase();
 }

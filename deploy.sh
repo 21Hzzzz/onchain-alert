@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-APP_NAME="onchain-alert"
-REPO_URL="https://github.com/21Hzzzz/onchain-alert.git"
-APP_DIR="/root/onchain-alert"
+APP_NAME="onchain-radar"
+REPO_URL="https://github.com/21Hzzzz/onchain-radar.git"
+APP_DIR="/root/onchain-radar"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
+GLOBAL_COMMAND="/usr/local/bin/radar"
 BUN_BIN="/root/.bun/bin/bun"
 CONFIG_FILES=(".env" "addresses.txt" "config.json")
 ENV_KEYS=(
@@ -177,11 +178,36 @@ install_project_dependencies() {
   "$BUN_BIN" install --frozen-lockfile
 }
 
+ensure_script_permissions() {
+  local script
+
+  for script in "deploy.sh" "radar"; do
+    if [[ -f "$APP_DIR/$script" ]]; then
+      chmod +x "$APP_DIR/$script"
+    fi
+  done
+}
+
+install_global_command() {
+  log "Installing global command: $GLOBAL_COMMAND"
+  cat > "$GLOBAL_COMMAND" <<WRAPPER
+#!/usr/bin/env bash
+set -Eeuo pipefail
+APP_SCRIPT="$APP_DIR/radar"
+if [[ ! -x "\$APP_SCRIPT" ]]; then
+  printf '[%s] ERROR: operational script not found or not executable: %s\n' "$APP_NAME" "\$APP_SCRIPT" >&2
+  exit 1
+fi
+exec "\$APP_SCRIPT" "\$@"
+WRAPPER
+  chmod +x "$GLOBAL_COMMAND"
+}
+
 write_systemd_service() {
   log "Writing systemd service..."
   cat > "$SERVICE_FILE" <<SERVICE
 [Unit]
-Description=Onchain Alert Ethereum monitor
+Description=Onchain Radar Ethereum monitor
 After=network-online.target
 Wants=network-online.target
 
@@ -210,14 +236,18 @@ main() {
   install_system_dependencies
   install_bun
   clone_or_update_repository
+  ensure_script_permissions
+  install_global_command
   ensure_env_file
   install_project_dependencies
   write_systemd_service
   start_service
 
   log "Deployment completed."
-  log "Check status: systemctl status $APP_NAME"
-  log "Follow logs: journalctl -u $APP_NAME -f"
+  log "Update: radar update"
+  log "Uninstall: radar uninstall --yes"
+  log "Check status: radar status"
+  log "Follow logs: radar logs"
 }
 
 main "$@"
