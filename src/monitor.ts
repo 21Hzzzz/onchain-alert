@@ -68,26 +68,32 @@ export async function runMonitor(config: MonitorConfig): Promise<void> {
   let nextBlockNumber = startBlockNumber;
 
   while (true) {
-    const currentLatestBlockNumber = await client.getBlockNumber();
+    try {
+      const currentLatestBlockNumber = await client.getBlockNumber();
 
-    while (nextBlockNumber <= currentLatestBlockNumber) {
-      const result = await processBlock({
-        client,
-        blockNumber: nextBlockNumber,
-        watchedAddressKeys,
-        blacklistedContractKeys,
-        mintRouterContractKeys,
-        blacklistedMethods,
-        detector,
-        telegramConfig,
-        resolveMethodName,
-        isContractAddress,
-        getTransactionReceipt,
-      });
-      console.info(
-        `Scanned block ${nextBlockNumber.toString()} / latest ${currentLatestBlockNumber.toString()} | interactions=${result.interactionCount} alerts=${result.alertCount}`,
+      while (nextBlockNumber <= currentLatestBlockNumber) {
+        const result = await processBlock({
+          client,
+          blockNumber: nextBlockNumber,
+          watchedAddressKeys,
+          blacklistedContractKeys,
+          mintRouterContractKeys,
+          blacklistedMethods,
+          detector,
+          telegramConfig,
+          resolveMethodName,
+          isContractAddress,
+          getTransactionReceipt,
+        });
+        console.info(
+          `Scanned block ${nextBlockNumber.toString()} / latest ${currentLatestBlockNumber.toString()} | interactions=${result.interactionCount} alerts=${result.alertCount}`,
+        );
+        nextBlockNumber += 1n;
+      }
+    } catch (error) {
+      console.error(
+        `Monitor loop error near block ${nextBlockNumber.toString()}: ${formatError(error)}`,
       );
-      nextBlockNumber += 1n;
     }
 
     await sleep(config.pollIntervalMs);
@@ -153,10 +159,25 @@ async function processBlock({
 
 function createContractCodeResolver(client: EthereumPublicClient) {
   return async function isContractAddress(address: Address, blockNumber: bigint): Promise<boolean> {
-    const bytecode = await client.getBytecode({
-      address,
-      blockNumber,
-    });
+    let bytecode: Awaited<ReturnType<EthereumPublicClient["getBytecode"]>>;
+    try {
+      bytecode = await client.getBytecode({
+        address,
+        blockNumber,
+      });
+    } catch (error) {
+      if (!isMissingHistoricalHeaderError(error)) {
+        throw error;
+      }
+
+      console.error(
+        `RPC does not have historical header for eth_getCode at block ${blockNumber.toString()}; falling back to latest code for ${address}.`,
+      );
+      bytecode = await client.getBytecode({
+        address,
+      });
+    }
+
     return bytecode !== undefined && bytecode !== "0x";
   };
 }
@@ -179,4 +200,12 @@ function createTransactionReceiptResolver(client: EthereumPublicClient): Transac
 
 function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isMissingHistoricalHeaderError(error: unknown): boolean {
+  return formatError(error).toLowerCase().includes("header not found");
 }

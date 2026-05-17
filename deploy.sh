@@ -213,7 +213,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=$APP_DIR
 ExecStart=$BUN_BIN run start
-Restart=always
+Restart=on-failure
 RestartSec=10
 Environment=PATH=/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 

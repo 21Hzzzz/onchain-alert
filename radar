@@ -153,6 +153,29 @@ install_dependencies() {
   "$BUN_BIN" install --frozen-lockfile || return
 }
 
+write_systemd_service() {
+  assert_safe_targets
+  log "Writing systemd service..."
+  cat > "$SERVICE_FILE" <<SERVICE
+[Unit]
+Description=Onchain Radar Ethereum monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=$APP_DIR
+ExecStart=$BUN_BIN run start
+Restart=on-failure
+RestartSec=10
+Environment=PATH=/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+  systemctl daemon-reload
+}
+
 rollback_update() {
   local previous_commit="$1"
   local backup_dir="$2"
@@ -163,6 +186,7 @@ rollback_update() {
   ensure_script_permissions || log "WARNING: failed to restore script permissions."
   install_global_command || log "WARNING: failed to restore global radar command."
   install_dependencies || log "WARNING: failed to reinstall dependencies after rollback."
+  write_systemd_service || log "WARNING: failed to restore systemd service after rollback."
   timeout "$SERVICE_OPERATION_TIMEOUT_SECONDS" systemctl restart "$APP_NAME" || log "WARNING: failed to restart service after rollback."
 }
 
@@ -182,6 +206,7 @@ sync_repository_for_update() {
 run_post_update_steps() {
   install_dependencies || return
   run_validation || return
+  write_systemd_service || return
   log "Restarting service..."
   timeout "$SERVICE_OPERATION_TIMEOUT_SECONDS" systemctl restart "$APP_NAME" || return
 }
