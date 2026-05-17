@@ -65,12 +65,14 @@ clone_or_update_repository() {
 
     log "Cloning repository into $APP_DIR..."
     git clone "$REPO_URL" "$APP_DIR"
+    git -C "$APP_DIR" config core.fileMode false
     return
   fi
 
   log "Updating existing repository..."
   local backup_dir
   backup_dir="$(mktemp -d)"
+  git -C "$APP_DIR" config core.fileMode false
 
   for file in "${CONFIG_FILES[@]}"; do
     if [[ -f "$APP_DIR/$file" ]]; then
@@ -78,11 +80,7 @@ clone_or_update_repository() {
     fi
   done
 
-  for file in "addresses.txt" "config.json"; do
-    if git -C "$APP_DIR" ls-files --error-unmatch "$file" >/dev/null 2>&1; then
-      git -C "$APP_DIR" checkout -- "$file"
-    fi
-  done
+  git -C "$APP_DIR" reset --hard HEAD
 
   git -C "$APP_DIR" fetch origin
   git -C "$APP_DIR" checkout main

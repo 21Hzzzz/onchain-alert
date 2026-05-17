@@ -107,14 +107,10 @@ restore_runtime_config() {
   fi
 }
 
-reset_tracked_runtime_files() {
-  local file
-
-  for file in "addresses.txt" "config.json"; do
-    if git -C "$APP_DIR" ls-files --error-unmatch "$file" >/dev/null 2>&1; then
-      git -C "$APP_DIR" checkout -- "$file"
-    fi
-  done
+prepare_git_worktree_for_update() {
+  log "Preparing git worktree..."
+  git -C "$APP_DIR" config core.fileMode false || return
+  git -C "$APP_DIR" reset --hard HEAD || return
 }
 
 ensure_script_permissions() {
@@ -173,7 +169,7 @@ rollback_update() {
 sync_repository_for_update() {
   local backup_dir="$1"
 
-  reset_tracked_runtime_files || return
+  prepare_git_worktree_for_update || return
   git -C "$APP_DIR" remote set-url "$REMOTE_NAME" "$REPO_URL" || return
   git -C "$APP_DIR" fetch "$REMOTE_NAME" || return
   git -C "$APP_DIR" checkout "$REMOTE_BRANCH" || return
